@@ -1,12 +1,14 @@
 import copy
 import numpy as np
 
-import openai
+from openai import OpenAI
 from sklearn.model_selection import RepeatedKFold
 from .caafe_evaluate import (
     evaluate_dataset,
 )
 from .run_llm_code import run_llm_code
+
+client = OpenAI()
 
 
 def get_prompt(
@@ -131,7 +133,7 @@ def generate_features(
         if model == "skip":
             return ""
 
-        completion = openai.ChatCompletion.create(
+        completion = client.chat.completions.create(
             model=model,
             messages=messages,
             stop=["```end"],
