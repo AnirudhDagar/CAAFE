@@ -18,9 +18,9 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=[
-        "openai==0.28",
+        "openai>=1.40.0,<2.0.0",  # Update this to match langchain-openai's requirement in AGA
         "kaggle",
         "openml==0.12.0",
         "tabpfn",
