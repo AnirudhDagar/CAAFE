@@ -13,8 +13,6 @@ from .metrics import auc_metric, accuracy_metric
 import pandas as pd
 import numpy as np
 from typing import Optional
-import pandas as pd
-
 
 
 class CAAFEClassifier(BaseEstimator, ClassifierMixin):
@@ -28,6 +26,8 @@ class CAAFEClassifier(BaseEstimator, ClassifierMixin):
     llm_model (str, optional): The LLM model to use for generating features. Defaults to 'gpt-3.5-turbo'.
     n_splits (int, optional): The number of cross-validation splits to use during feature generation. Defaults to 10.
     n_repeats (int, optional): The number of times to repeat the cross-validation during feature generation. Defaults to 2.
+    llm_provider : (str, optional): The LLM provider to use. Can be 'openai' or 'bedrock'.
+    region_name (str, optional): The AWS region name when using Bedrock provider.
     """
     def __init__(
         self,
@@ -38,6 +38,9 @@ class CAAFEClassifier(BaseEstimator, ClassifierMixin):
         n_splits: int = 10,
         n_repeats: int = 2,
         display_method: str = "markdown",
+        llm_provider: str = "openai",
+        region_name: str = "us-west-2",
+        **kwargs
     ) -> None:
         self.base_classifier = base_classifier
         if self.base_classifier is None:
@@ -52,12 +55,15 @@ class CAAFEClassifier(BaseEstimator, ClassifierMixin):
             self.base_classifier.fit = partial(
                 self.base_classifier.fit, overwrite_warning=True
             )
+        self.llm_provider = llm_provider
         self.llm_model = llm_model
         self.iterations = iterations
         self.optimization_metric = optimization_metric
         self.n_splits = n_splits
         self.n_repeats = n_repeats
         self.display_method = display_method
+        self.region_name = region_name
+        self.kwargs = kwargs
 
     def fit_pandas(self, df, dataset_description, target_column_name, **kwargs):
         """
@@ -142,6 +148,9 @@ class CAAFEClassifier(BaseEstimator, ClassifierMixin):
                 display_method=self.display_method,
                 n_splits=self.n_splits,
                 n_repeats=self.n_repeats,
+                llm_provider=self.llm_provider,
+                region_name=self.region_name,
+                **self.kwargs # Pass through any additional provider-specific kwarg
             )
 
         df_train = run_llm_code(

@@ -1,12 +1,67 @@
 import copy
 import numpy as np
+from typing import Optional, Union, Dict, Any
 
-import openai
+from openai import OpenAI
+from langchain_aws import ChatBedrock
+import boto3
 from sklearn.model_selection import RepeatedKFold
-from .caafe_evaluate import (
-    evaluate_dataset,
-)
+from .caafe_evaluate import evaluate_dataset
 from .run_llm_code import run_llm_code
+
+
+class LLMClient:
+    """Base class for LLM clients"""
+    def generate_completion(self, messages: list, **kwargs) -> str:
+        raise NotImplementedError
+
+
+class OpenAIClient(LLMClient):
+    """OpenAI client implementation"""
+    def __init__(self):
+        self.client = OpenAI()
+
+    def generate_completion(self, messages: list, **kwargs) -> str:
+        completion = self.client.chat.completions.create(
+            model=kwargs.get('model', 'gpt-3.5-turbo'),
+            messages=messages,
+            stop=kwargs.get('stop', ["```end"]),
+            temperature=kwargs.get('temperature', 0.5),
+            max_tokens=kwargs.get('max_tokens', 500)
+        )
+        return completion.choices[0].message.content
+
+
+class BedrockClient(LLMClient):
+    """Bedrock client implementation"""
+    def __init__(self, region_name: str = "us-west-2"):
+        self.client = ChatBedrock(
+            model_id="anthropic.claude-3-sonnet-20240229-v1:0",  # Default model
+            region_name=region_name,
+            model_kwargs={
+                "temperature": 0.5,
+                "max_tokens": 500,
+                "stop_sequences": ["```end"]  # Default stop sequence
+            }
+        )
+
+    def generate_completion(self, messages: list, **kwargs) -> str:
+        # Update model kwargs with any provided stop sequences
+        model_kwargs = {
+            "temperature": kwargs.get('temperature', 0.5),
+            "max_tokens": kwargs.get('max_tokens', 500),
+            "stop_sequences": kwargs.get('stop', ["```end"])  # Use provided stop sequences or default
+        }
+
+        # Update client's model_kwargs
+        self.client.model_kwargs.update(model_kwargs)
+
+        formatted_messages = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in messages
+        ]
+        response = self.client.invoke(formatted_messages)
+        return response.content
 
 
 def get_prompt(
@@ -96,14 +151,17 @@ def build_prompt_from_df(ds, df, iterative=1):
 def generate_features(
     ds,
     df,
-    model="gpt-3.5-turbo",
-    just_print_prompt=False,
-    iterative=1,
-    metric_used=None,
-    iterative_method="logistic",
-    display_method="markdown",
-    n_splits=10,
-    n_repeats=2,
+    model: str = "gpt-3.5-turbo",
+    just_print_prompt: bool = False,
+    iterative: int = 1,
+    metric_used: Optional[str] = None,
+    iterative_method: str = "logistic",
+    display_method: str = "markdown",
+    n_splits: int = 10,
+    n_repeats: int = 2,
+    llm_provider: str = "openai",
+    region_name: str = "us-west-2",
+    **kwargs
 ):
     def format_for_display(code):
         code = code.replace("```python", "").replace("```", "").replace("<end>", "")
@@ -121,6 +179,14 @@ def generate_features(
         iterative == 1 or metric_used is not None
     ), "metric_used must be set if iterative"
 
+    # Initialize the appropriate LLM client
+    if llm_provider == "openai":
+        llm_client = OpenAIClient()
+    elif llm_provider == "bedrock":
+        llm_client = BedrockClient(region_name=region_name)
+    else:
+        raise ValueError(f"Unsupported LLM provider: {llm_provider}")
+
     prompt = build_prompt_from_df(ds, df, iterative=iterative)
 
     if just_print_prompt:
@@ -131,14 +197,12 @@ def generate_features(
         if model == "skip":
             return ""
 
-        completion = openai.ChatCompletion.create(
+        code = llm_client.generate_completion(
+            messages,
             model=model,
-            messages=messages,
-            stop=["```end"],
-            temperature=0.5,
-            max_tokens=500,
+            temperature=kwargs.get('temperature', 0.5),
+            max_tokens=kwargs.get('max_tokens', 1000)
         )
-        code = completion["choices"][0]["message"]["content"]
         code = code.replace("```python", "").replace("```", "").replace("<end>", "")
         return code
 
