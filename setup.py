@@ -20,7 +20,8 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=[
-        "openai>=1.40.0,<2.0.0",  # Update this to match langchain-openai's requirement in AGA
+        "openai>=1.40.0,<2.0.0",  # For OpenAI integration
+        "langchain_aws>=0.2.2,<0.3",  # For Bedrock integration
         "kaggle",
         "openml==0.12.0",
         "tabpfn",
