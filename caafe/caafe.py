@@ -9,8 +9,6 @@ from sklearn.model_selection import RepeatedKFold
 from .caafe_evaluate import evaluate_dataset
 from .run_llm_code import run_llm_code
 
-client = OpenAI()
-
 
 class LLMClient:
     """Base class for LLM clients"""
