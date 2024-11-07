@@ -27,7 +27,7 @@ class CAAFEClassifier(BaseEstimator, ClassifierMixin):
     n_splits (int, optional): The number of cross-validation splits to use during feature generation. Defaults to 10.
     n_repeats (int, optional): The number of times to repeat the cross-validation during feature generation. Defaults to 2.
     llm_provider : (str, optional): The LLM provider to use. Can be 'openai' or 'bedrock'.
-    region_name (str, optional): The AWS region name when using Bedrock provider.
+    llm_provider_kwargs (dict, optional): Keyword arguments used by LLM provider.
     """
     def __init__(
         self,
@@ -39,8 +39,7 @@ class CAAFEClassifier(BaseEstimator, ClassifierMixin):
         n_repeats: int = 2,
         display_method: str = "markdown",
         llm_provider: str = "openai",
-        region_name: str = "us-west-2",
-        **kwargs
+        llm_provider_kwargs: dict = None
     ) -> None:
         self.base_classifier = base_classifier
         if self.base_classifier is None:
@@ -62,8 +61,7 @@ class CAAFEClassifier(BaseEstimator, ClassifierMixin):
         self.n_splits = n_splits
         self.n_repeats = n_repeats
         self.display_method = display_method
-        self.region_name = region_name
-        self.kwargs = kwargs
+        self.llm_provider_kwargs = llm_provider_kwargs
 
     def fit_pandas(self, df, dataset_description, target_column_name, **kwargs):
         """
@@ -149,8 +147,7 @@ class CAAFEClassifier(BaseEstimator, ClassifierMixin):
                 n_splits=self.n_splits,
                 n_repeats=self.n_repeats,
                 llm_provider=self.llm_provider,
-                region_name=self.region_name,
-                **self.kwargs # Pass through any additional provider-specific kwarg
+                llm_provider_kwargs=self.llm_provider_kwargs # Pass through any additional provider-specific kwarg
             )
 
         df_train = run_llm_code(

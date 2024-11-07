@@ -1,15 +1,20 @@
 import copy
 import numpy as np
-from typing import Optional, Union, Dict, Any
+from typing import Optional, Union, Dict, Any, Type
 
 from openai import OpenAI
-from langchain_aws import ChatBedrock
-import boto3
 from sklearn.model_selection import RepeatedKFold
 from .caafe_evaluate import evaluate_dataset
 from .run_llm_code import run_llm_code
 
-client = OpenAI()
+
+# Try to import optional dependencies
+try:
+    from langchain_aws import ChatBedrock
+    import boto3
+    BEDROCK_AVAILABLE = True
+except ImportError:
+    BEDROCK_AVAILABLE = False
 
 
 class LLMClient:
@@ -20,8 +25,8 @@ class LLMClient:
 
 class OpenAIClient(LLMClient):
     """OpenAI client implementation"""
-    def __init__(self):
-        self.client = OpenAI()
+    def __init__(self, **kwargs):
+        self.client = OpenAI(**kwargs)
 
     def generate_completion(self, messages: list, **kwargs) -> str:
         completion = self.client.chat.completions.create(
@@ -36,28 +41,23 @@ class OpenAIClient(LLMClient):
 
 class BedrockClient(LLMClient):
     """Bedrock client implementation"""
-    def __init__(self, region_name: str = "us-west-2"):
+    def __init__(self, **kwargs):
+        if not BEDROCK_AVAILABLE:
+            raise ImportError(
+                "langchain_aws is not installed. Please install it with "
+                "'pip install langchain_aws' to use the Bedrock client."
+            )
         self.client = ChatBedrock(
-            model_id="anthropic.claude-3-sonnet-20240229-v1:0",  # Default model
-            region_name=region_name,
+            model_id=kwargs.get("model", "anthropic.claude-3-sonnet-20240229-v1:0"),  # Default model
+            region_name=kwargs.get("region_name", "us-west-2"),
             model_kwargs={
-                "temperature": 0.5,
-                "max_tokens": 500,
-                "stop_sequences": ["```end"]  # Default stop sequence
+                "temperature": kwargs.get('temperature', 0.5),
+                "max_tokens": kwargs.get('max_tokens', 500),
+                "stop_sequences": kwargs.get('stop', ["```end"])  # Default stop sequence
             }
         )
 
     def generate_completion(self, messages: list, **kwargs) -> str:
-        # Update model kwargs with any provided stop sequences
-        model_kwargs = {
-            "temperature": kwargs.get('temperature', 0.5),
-            "max_tokens": kwargs.get('max_tokens', 500),
-            "stop_sequences": kwargs.get('stop', ["```end"])  # Use provided stop sequences or default
-        }
-
-        # Update client's model_kwargs
-        self.client.model_kwargs.update(model_kwargs)
-
         formatted_messages = [
             {"role": msg["role"], "content": msg["content"]}
             for msg in messages
@@ -161,9 +161,8 @@ def generate_features(
     display_method: str = "markdown",
     n_splits: int = 10,
     n_repeats: int = 2,
-    llm_provider: str = "openai",
-    region_name: str = "us-west-2",
-    **kwargs
+    llm_provider: Union[str, Type[LLMClient]] = "openai",
+    llm_provider_kwargs: Optional[Dict[str, Any]] = None,
 ):
     def format_for_display(code):
         code = code.replace("```python", "").replace("```", "").replace("<end>", "")
@@ -181,13 +180,19 @@ def generate_features(
         iterative == 1 or metric_used is not None
     ), "metric_used must be set if iterative"
 
-    # Initialize the appropriate LLM client
-    if llm_provider == "openai":
-        llm_client = OpenAIClient()
-    elif llm_provider == "bedrock":
-        llm_client = BedrockClient(region_name=region_name)
-    else:
-        raise ValueError(f"Unsupported LLM provider: {llm_provider}")
+    # Initialize the LLM client
+    if llm_provider_kwargs is None:
+        llm_provider_kwargs = {}
+
+    if isinstance(llm_provider, str):
+        if llm_provider == "openai":
+            llm_provider = OpenAIClient
+        elif llm_provider == "bedrock":
+            llm_provider = BedrockClient
+        else:
+            raise ValueError(f"Unsupported LLM provider: {llm_provider}")
+
+    llm_client = llm_provider(**llm_provider_kwargs)
 
     prompt = build_prompt_from_df(ds, df, iterative=iterative)
 
@@ -200,10 +205,10 @@ def generate_features(
             return ""
 
         code = llm_client.generate_completion(
-            messages,
+            messages=messages,
             model=model,
-            temperature=kwargs.get('temperature', 0.5),
-            max_tokens=kwargs.get('max_tokens', 1000)
+            temperature=llm_provider_kwargs.get('temperature', 0.5),
+            max_tokens=llm_provider_kwargs.get('max_tokens', 500)
         )
         code = code.replace("```python", "").replace("```", "").replace("<end>", "")
         return code
