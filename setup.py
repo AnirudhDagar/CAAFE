@@ -1,11 +1,14 @@
 from setuptools import setup, find_packages
 
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
 setup(
     name="caafe",
     version="0.1.5",
     packages=find_packages(),
-    description="Context-Aware Automated Feature Engineering (CAAFE) is an automated machine learning tool that uses large language models for feature engineering in tabular datasets. It generates Python code for new features along with explanations for their utility, enhancing interpretability.",
-    long_description=open("README.md").read(),
+    description="Context-Aware Automated Feature Engineering (CAAFE) is an automated machine learning tool that uses large language models for feature engineering in tabular datasets.It generates Python code for new features along with explanations for their utility, enhancing interpretability.",
+    long_description=long_description,
     long_description_content_type="text/markdown",
     author="Noah Hollmann, Samuel Müller, Frank Hutter",
     author_email="noah.homa@gmail.com",
